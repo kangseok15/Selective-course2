@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  letter-spacing: -0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  @media print {
+    /* Hide everything by default */
+    body > * {
+      display: none !important;
+    }
+    
+    /* Show only the print area */
+    body > #root, 
+    #root > div,
+    .print-area {
+      display: block !important;
+      visibility: visible !important;
+    }
+
+    /* Ensure parent containers don't hide the print area */
+    .print-area {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      border: none !important;
+      box-shadow: none !important;
+      visibility: visible !important;
+    }
+
+    /* Hide UI elements that shouldn't be in PDF */
+    .print-hidden {
+      display: none !important;
+    }
+
+    /* Table styling for print */
+    table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+    }
+    
+    th, td {
+      border: 1px solid #cbd5e1 !important;
+      color: #000 !important;
+      background-color: transparent !important;
+    }
+
+    /* Keep the recommendation highlights in print */
+    .bg-blue-50\/50 {
+      background-color: #eff6ff !important;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .bg-blue-600 {
+      background-color: #2563eb !important;
+      -webkit-print-color-adjust: exact;
+    }
+
+    @page {
+      size: A4;
+      margin: 1.5cm;
+    }
+  }
+}
