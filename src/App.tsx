@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, Fragment } from 'react';
+import React, { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import { toJpeg } from 'html-to-image';
@@ -167,6 +167,43 @@ const FIELD_META: Record<string, FieldMeta> = {
   }
 };
 
+// --- 기본 교육과정(사용자 지정) 저장/불러오기 ---
+// PDF 업로드나 직접 입력으로 만든 교육과정을 브라우저에 저장해두고,
+// 페이지를 새로고침하거나 초기화하더라도 항상 이 교육과정이 기본값으로 적용되도록 한다.
+const DEFAULT_CURRICULUM_KEY = 'selective-course-default-curriculum';
+
+interface DefaultCurriculum {
+  mandatory: Record<number, SungshinSubject[]>;
+  groups: SelectionGroup[];
+}
+
+const saveDefaultCurriculum = (data: DefaultCurriculum) => {
+  try {
+    localStorage.setItem(DEFAULT_CURRICULUM_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('기본 교육과정 저장 실패:', e);
+  }
+};
+
+const loadDefaultCurriculum = (): DefaultCurriculum | null => {
+  try {
+    const raw = localStorage.getItem(DEFAULT_CURRICULUM_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as DefaultCurriculum;
+  } catch (e) {
+    console.error('기본 교육과정 불러오기 실패:', e);
+    return null;
+  }
+};
+
+const clearDefaultCurriculum = () => {
+  try {
+    localStorage.removeItem(DEFAULT_CURRICULUM_KEY);
+  } catch (e) {
+    console.error('기본 교육과정 삭제 실패:', e);
+  }
+};
+
 const getFieldMeta = (fieldName: string): FieldMeta => {
   return FIELD_META[fieldName] || {
     name: fieldName,
@@ -213,12 +250,27 @@ export default function App() {
     mandatory: Record<number, SungshinSubject[]>;
     groups: SelectionGroup[];
   } | null>(null);
+  // 현재 반영하려는 교육과정을 "기본 교육과정"으로 지정할지 여부
+  const [setAsDefaultCurriculum, setSetAsDefaultCurriculum] = useState(false);
+  // 브라우저에 저장된 기본 교육과정이 있는지 여부 (있으면 헤더에 표시)
+  const [hasDefaultCurriculum, setHasDefaultCurriculum] = useState(false);
   // Consultant checked state: overrides default AI recommendations
   // key: `${grade}-${groupId}-${subjectName}-${semester}`
   // value: 'consultant' (녹색 체크) | 'off' (체크 해제)
   const [consultantChecks, setConsultantChecks] = useState<Record<string, 'consultant' | 'off'>>({});
   const printRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 앱을 처음 열거나(새로고침 포함) 새로 시작할 때, 저장된 기본 교육과정이 있으면 자동으로 불러온다.
+  useEffect(() => {
+    const saved = loadDefaultCurriculum();
+    if (saved) {
+      setCustomMandatory(saved.mandatory);
+      setCustomGroups(saved.groups);
+      setIsCustomMode(true);
+      setHasDefaultCurriculum(true);
+    }
+  }, []);
 
   const normalizeSubjectName = (name: string) => {
     if (!name) return '';
@@ -390,13 +442,115 @@ export default function App() {
 
   const applyParsedData = () => {
     if (!parsedData) return;
-    
-    setCustomMandatory(parsedData.mandatory);
-    setCustomGroups(parsedData.groups);
+
+    // 편집 중 이름을 비워둔 빈 항목은 반영 시 제외한다.
+    const cleanedMandatory: Record<number, SungshinSubject[]> = {};
+    Object.entries(parsedData.mandatory).forEach(([grade, subjects]) => {
+      cleanedMandatory[Number(grade)] = subjects.filter(s => s.name.trim() !== '');
+    });
+    const cleanedGroups: SelectionGroup[] = parsedData.groups.map(g => ({
+      ...g,
+      subjects: g.subjects.filter(s => s.name.trim() !== '')
+    }));
+
+    setCustomMandatory(cleanedMandatory);
+    setCustomGroups(cleanedGroups);
     setIsCustomMode(true);
     setShowPdfReview(false);
     setParsedData(null);
+
+    if (setAsDefaultCurriculum) {
+      saveDefaultCurriculum({ mandatory: cleanedMandatory, groups: cleanedGroups });
+      setHasDefaultCurriculum(true);
+      setSetAsDefaultCurriculum(false);
+    }
+
     alert('교육과정이 성공적으로 반영되었습니다.');
+  };
+
+  // --- PDF에서 추출한 데이터를 검토/수정하기 위한 편집 헬퍼들 ---
+  const updateParsedMandatorySubjectName = (grade: number, idx: number, name: string) => {
+    if (!parsedData) return;
+    const list = [...(parsedData.mandatory[grade] || [])];
+    list[idx] = { ...list[idx], name };
+    setParsedData({ ...parsedData, mandatory: { ...parsedData.mandatory, [grade]: list } });
+  };
+
+  const toggleParsedMandatorySemester = (grade: number, idx: number, semester: number) => {
+    if (!parsedData) return;
+    const list = [...(parsedData.mandatory[grade] || [])];
+    const current = list[idx];
+    const has = current.semesters.includes(semester);
+    let semesters = has
+      ? current.semesters.filter(s => s !== semester)
+      : [...current.semesters, semester].sort();
+    if (semesters.length === 0) semesters = [semester]; // 최소 1개 학기는 유지
+    list[idx] = { ...current, semesters };
+    setParsedData({ ...parsedData, mandatory: { ...parsedData.mandatory, [grade]: list } });
+  };
+
+  const removeParsedMandatorySubject = (grade: number, idx: number) => {
+    if (!parsedData) return;
+    const list = (parsedData.mandatory[grade] || []).filter((_, i) => i !== idx);
+    setParsedData({ ...parsedData, mandatory: { ...parsedData.mandatory, [grade]: list } });
+  };
+
+  const addParsedMandatorySubject = (grade: number) => {
+    if (!parsedData) return;
+    const list = [...(parsedData.mandatory[grade] || []), { name: '', semesters: [1] }];
+    setParsedData({ ...parsedData, mandatory: { ...parsedData.mandatory, [grade]: list } });
+  };
+
+  const updateParsedGroupField = (groupIdx: number, field: 'description' | 'selectCount', value: any) => {
+    if (!parsedData) return;
+    const groups = [...parsedData.groups];
+    groups[groupIdx] = { ...groups[groupIdx], [field]: value };
+    setParsedData({ ...parsedData, groups });
+  };
+
+  const updateParsedGroupSubjectName = (groupIdx: number, subIdx: number, name: string) => {
+    if (!parsedData) return;
+    const groups = [...parsedData.groups];
+    const subjects = [...groups[groupIdx].subjects];
+    subjects[subIdx] = { ...subjects[subIdx], name };
+    groups[groupIdx] = { ...groups[groupIdx], subjects };
+    setParsedData({ ...parsedData, groups });
+  };
+
+  const removeParsedGroupSubject = (groupIdx: number, subIdx: number) => {
+    if (!parsedData) return;
+    const groups = [...parsedData.groups];
+    groups[groupIdx] = { ...groups[groupIdx], subjects: groups[groupIdx].subjects.filter((_, i) => i !== subIdx) };
+    setParsedData({ ...parsedData, groups });
+  };
+
+  const addParsedGroupSubject = (groupIdx: number) => {
+    if (!parsedData) return;
+    const groups = [...parsedData.groups];
+    const target = groups[groupIdx];
+    groups[groupIdx] = {
+      ...target,
+      subjects: [...target.subjects, { name: '', semesters: target.semester === '1학기' ? [1] : [2] }]
+    };
+    setParsedData({ ...parsedData, groups });
+  };
+
+  const removeParsedGroup = (groupIdx: number) => {
+    if (!parsedData) return;
+    setParsedData({ ...parsedData, groups: parsedData.groups.filter((_, i) => i !== groupIdx) });
+  };
+
+  const addParsedGroup = () => {
+    if (!parsedData) return;
+    const newGroup: SelectionGroup = {
+      id: `선택과목 ${parsedData.groups.length + 1}`,
+      grade: 2,
+      semester: '1학기',
+      selectCount: 1,
+      description: '새 선택과목군',
+      subjects: []
+    };
+    setParsedData({ ...parsedData, groups: [...parsedData.groups, newGroup] });
   };
 
   const handleDone = () => {
@@ -441,6 +595,12 @@ export default function App() {
     setCustomGroups(newGroups);
     setIsCustomMode(true);
     setShowCustomForm(false);
+
+    if (setAsDefaultCurriculum) {
+      saveDefaultCurriculum({ mandatory: newMandatory, groups: newGroups });
+      setHasDefaultCurriculum(true);
+      setSetAsDefaultCurriculum(false);
+    }
   };
 
   // All majors flattened for global search
@@ -1021,15 +1181,31 @@ export default function App() {
               </div>
             )}
             
+            {hasDefaultCurriculum && (
+              <button
+                onClick={() => {
+                  if (confirm('기본 교육과정 설정을 해제하시겠습니까?\n해제 후 초기화하면 원래 성신 교육과정으로 돌아갑니다.')) {
+                    clearDefaultCurriculum();
+                    setHasDefaultCurriculum(false);
+                  }
+                }}
+                title="클릭하여 기본 교육과정 설정 해제"
+                className="hidden md:flex items-center gap-1 px-2.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-[11px] font-bold border border-emerald-200 shrink-0 transition-all"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">기본 설정됨</span>
+              </button>
+            )}
+
             <button 
               onClick={() => setShowCustomForm(true)}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0"
             >
               <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">교육과정 입력</span>
+              <span className="hidden sm:inline whitespace-nowrap">교육과정 입력</span>
             </button>
 
-            <div className="relative">
+            <div className="relative shrink-0">
               <input 
                 type="file"
                 ref={fileInputRef}
@@ -1040,27 +1216,37 @@ export default function App() {
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isParsingPdf}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-blue-700 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-blue-700 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed group whitespace-nowrap"
               >
                 {isParsingPdf ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                 ) : (
-                  <FileUp className="w-4 h-4" />
+                  <FileUp className="w-4 h-4 shrink-0" />
                 )}
-                <span className="hidden sm:inline">PDF로 불러오기</span>
+                <span className="hidden sm:inline whitespace-nowrap">PDF로 불러오기</span>
               </button>
             </div>
             
             {isCustomMode && (
               <button 
                 onClick={() => {
-                  setIsCustomMode(false);
-                  setCustomGroups([]);
+                  const saved = loadDefaultCurriculum();
+                  if (saved) {
+                    // 기본 교육과정이 지정되어 있다면 초기화 시 그 교육과정으로 되돌아간다.
+                    setCustomMandatory(saved.mandatory);
+                    setCustomGroups(saved.groups);
+                    setIsCustomMode(true);
+                  } else {
+                    setIsCustomMode(false);
+                    setCustomGroups([]);
+                    setCustomMandatory({});
+                  }
                 }}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0"
+                title={hasDefaultCurriculum ? '기본 교육과정으로 초기화합니다' : '입력한 교육과정을 초기화합니다'}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 whitespace-nowrap"
               >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">초기화</span>
+                <RotateCcw className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline whitespace-nowrap">초기화</span>
               </button>
             )}
           </div>
@@ -2602,12 +2788,12 @@ export default function App() {
                       <FileCheck className="w-6 h-6" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-black text-slate-900">추출된 교육과정 확인</h2>
-                      <p className="text-sm text-slate-500">AI가 분석한 내용을 확인하고 반영해주세요.</p>
+                      <h2 className="text-xl font-black text-slate-900">추출된 교육과정 확인 및 수정</h2>
+                      <p className="text-sm text-slate-500">AI가 분석한 내용을 확인하고, 필요하면 직접 수정한 뒤 반영해주세요.</p>
                     </div>
                   </div>
                   <button 
-                    onClick={() => setShowPdfReview(false)}
+                    onClick={() => { setShowPdfReview(false); setSetAsDefaultCurriculum(false); }}
                     className="p-2 hover:bg-slate-200 rounded-full transition-colors"
                   >
                     <X className="w-6 h-6 text-slate-400" />
@@ -2624,19 +2810,52 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {[2, 3].map(grade => (
                         <div key={grade} className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                          <h4 className="font-bold text-slate-700 mb-3">{grade}학년 필수</h4>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-bold text-slate-700">{grade}학년 필수</h4>
+                            <button
+                              onClick={() => addParsedMandatorySubject(grade)}
+                              className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              과목 추가
+                            </button>
+                          </div>
+                          <div className="space-y-2">
                             {parsedData.mandatory[grade]?.length > 0 ? (
                               parsedData.mandatory[grade].map((s, i) => (
-                                <span key={i} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 shadow-sm">
-                                  {s.name} 
-                                  <span className="ml-1 text-[10px] text-blue-500">
-                                    ({s.semesters.join(', ')}학기)
-                                  </span>
-                                </span>
+                                <div key={i} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm">
+                                  <input
+                                    type="text"
+                                    value={s.name}
+                                    onChange={(e) => updateParsedMandatorySubjectName(grade, i, e.target.value)}
+                                    placeholder="과목명"
+                                    className="flex-1 min-w-0 px-2 py-1 text-sm font-medium text-slate-700 outline-none bg-transparent"
+                                  />
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {[1, 2].map(sem => (
+                                      <button
+                                        key={sem}
+                                        onClick={() => toggleParsedMandatorySemester(grade, i, sem)}
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                          s.semesters.includes(sem)
+                                            ? 'bg-blue-100 text-blue-600'
+                                            : 'bg-slate-100 text-slate-400'
+                                        }`}
+                                      >
+                                        {sem}학기
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={() => removeParsedMandatorySubject(grade, i)}
+                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors shrink-0"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               ))
                             ) : (
-                              <p className="text-sm text-slate-400 italic">추출된 과목이 없습니다.</p>
+                              <p className="text-sm text-slate-400 italic py-2">추출된 과목이 없습니다. 위 '과목 추가'로 직접 입력할 수 있습니다.</p>
                             )}
                           </div>
                         </div>
@@ -2646,56 +2865,123 @@ export default function App() {
 
                   {/* Selection Groups */}
                   <section className="space-y-4">
-                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                      <span className="w-1.5 h-5 bg-purple-600 rounded-full"></span>
-                      학년별 선택 과목군
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <span className="w-1.5 h-5 bg-purple-600 rounded-full"></span>
+                        학년별 선택 과목군
+                      </h3>
+                      <button
+                        onClick={addParsedGroup}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        과목군 추가
+                      </button>
+                    </div>
                     <div className="space-y-4">
                       {parsedData.groups.length > 0 ? (
                         parsedData.groups.map((group, idx) => (
-                          <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-purple-200 transition-colors">
-                            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                              <div className="flex items-center gap-3">
-                                <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold">
-                                  {group.grade}학년 {group.semester}
-                                </span>
-                                <span className="text-slate-900 font-bold">{group.description}</span>
-                              </div>
-                              <div className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold">
-                                {group.subjects.length}개 중 {group.selectCount}개 선택
+                          <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-purple-200 transition-colors relative">
+                            <button
+                              onClick={() => removeParsedGroup(idx)}
+                              className="absolute top-4 right-4 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                              title="이 과목군 삭제"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <div className="flex flex-wrap items-center gap-3 mb-4 pr-8">
+                              <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold shrink-0">
+                                {group.grade}학년 {group.semester}
+                              </span>
+                              <input
+                                type="text"
+                                value={group.description}
+                                onChange={(e) => updateParsedGroupField(idx, 'description', e.target.value)}
+                                placeholder="과목군 설명"
+                                className="flex-1 min-w-[140px] px-2 py-1 text-slate-900 font-bold outline-none border-b border-transparent focus:border-purple-300 bg-transparent"
+                              />
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold shrink-0">
+                                <span>{group.subjects.length}개 중</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={group.selectCount}
+                                  onChange={(e) => updateParsedGroupField(idx, 'selectCount', parseInt(e.target.value) || 1)}
+                                  className="w-10 bg-white rounded px-1 py-0.5 text-center outline-none border border-slate-200"
+                                />
+                                <span>개 선택</span>
                               </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
                               {group.subjects.map((s, i) => (
-                                <span key={i} className="px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-xs text-slate-600">
-                                  {s.name}
-                                </span>
+                                <div key={i} className="flex items-center gap-1 bg-slate-50 border border-slate-100 rounded-lg pl-2.5 pr-1 py-1">
+                                  <input
+                                    type="text"
+                                    value={s.name}
+                                    onChange={(e) => updateParsedGroupSubjectName(idx, i, e.target.value)}
+                                    placeholder="과목명"
+                                    style={{ width: `${Math.max(3, s.name.length + 1)}ch` }}
+                                    className="text-xs text-slate-600 outline-none bg-transparent"
+                                  />
+                                  <button
+                                    onClick={() => removeParsedGroupSubject(idx, i)}
+                                    className="p-0.5 text-slate-300 hover:text-red-500 transition-colors"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
                               ))}
+                              <button
+                                onClick={() => addParsedGroupSubject(idx)}
+                                className="flex items-center gap-1 px-2.5 py-1 border border-dashed border-slate-300 rounded-lg text-xs font-bold text-slate-400 hover:text-purple-600 hover:border-purple-300 transition-colors"
+                              >
+                                <Plus className="w-3 h-3" />
+                                과목 추가
+                              </button>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
-                          추출된 선택 과목군이 없습니다.
+                        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 space-y-3">
+                          <p>추출된 선택 과목군이 없습니다.</p>
+                          <button
+                            onClick={addParsedGroup}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:border-purple-300 hover:text-purple-600 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            과목군 직접 추가하기
+                          </button>
                         </div>
                       )}
                     </div>
                   </section>
                 </div>
 
-                <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
-                  <button 
-                    onClick={() => setShowPdfReview(false)}
-                    className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"
-                  >
-                    취소
-                  </button>
-                  <button 
-                    onClick={applyParsedData}
-                    className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
-                  >
-                    확인 및 반영하기
-                  </button>
+                <div className="p-6 border-t border-slate-100 bg-slate-50 space-y-4">
+                  <label className="flex items-center gap-2.5 px-4 py-3 bg-white border border-slate-200 rounded-2xl cursor-pointer hover:border-emerald-300 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={setAsDefaultCurriculum}
+                      onChange={(e) => setSetAsDefaultCurriculum(e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    <span className="text-sm font-bold text-slate-700">이 교육과정을 기본 교육과정으로 설정</span>
+                    <span className="text-xs text-slate-400">— 다음부터 접속하거나 초기화해도 이 교육과정이 기본으로 적용됩니다</span>
+                  </label>
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => { setShowPdfReview(false); setSetAsDefaultCurriculum(false); }}
+                      className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-100 transition-all"
+                    >
+                      취소
+                    </button>
+                    <button 
+                      onClick={applyParsedData}
+                      className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                    >
+                      확인 및 반영하기
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </div>
@@ -2869,20 +3155,32 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button 
-                  onClick={() => setShowCustomForm(false)}
-                  className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700"
-                >
-                  취소
-                </button>
-                <button 
-                  onClick={handleDone}
-                  className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  교육과정 생성 완료
-                </button>
+              <div className="p-6 bg-slate-50 border-t border-slate-100 space-y-4">
+                <label className="flex items-center gap-2.5 px-4 py-3 bg-white border border-slate-200 rounded-2xl cursor-pointer hover:border-emerald-300 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={setAsDefaultCurriculum}
+                    onChange={(e) => setSetAsDefaultCurriculum(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-600"
+                  />
+                  <span className="text-sm font-bold text-slate-700">이 교육과정을 기본 교육과정으로 설정</span>
+                  <span className="text-xs text-slate-400">— 다음부터 접속하거나 초기화해도 이 교육과정이 기본으로 적용됩니다</span>
+                </label>
+                <div className="flex items-center justify-end gap-3">
+                  <button 
+                    onClick={() => { setShowCustomForm(false); setSetAsDefaultCurriculum(false); }}
+                    className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    onClick={handleDone}
+                    className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    교육과정 생성 완료
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
