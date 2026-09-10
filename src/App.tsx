@@ -54,9 +54,11 @@ import {
 import { UNIVERSITY_TIPS, UniversityTip } from './data/universityData';
 import { getSubjectDetail, SubjectDetail } from './data/subjectDetailsData';
 import { SubjectDetailModal } from './components/SubjectDetailModal';
-import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+// PDF 분석은 더 이상 브라우저에서 Gemini API를 직접 호출하지 않습니다.
+// 실제 API 키는 Cloudflare Worker(서버) 안에만 존재하며, 프론트엔드는 이 프록시 주소로만 요청을 보냅니다.
+// 아래 주소를 본인이 배포한 Cloudflare Worker 주소로 반드시 교체하세요.
+const PDF_PARSE_PROXY_URL = 'https://YOUR-WORKER-NAME.YOUR-SUBDOMAIN.workers.dev';
 
 // Frequently searched / popular majors for quick one-click navigation
 const POPULAR_MAJORS = [
@@ -175,6 +177,7 @@ const DEFAULT_CURRICULUM_KEY = 'selective-course-default-curriculum';
 interface DefaultCurriculum {
   mandatory: Record<number, SungshinSubject[]>;
   groups: SelectionGroup[];
+  schoolName?: string;
 }
 
 const saveDefaultCurriculum = (data: DefaultCurriculum) => {
@@ -231,6 +234,9 @@ export default function App() {
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customGroups, setCustomGroups] = useState<SelectionGroup[]>([]);
   const [customMandatory, setCustomMandatory] = useState<Record<number, SungshinSubject[]>>({});
+  // 계획서 상단에 표시되는 학교명 (PDF 불러오기/직접 입력 시 지정 가능, 기본값은 숭신고등학교)
+  const [schoolName, setSchoolName] = useState('숭신고등학교');
+  const [tempSchoolName, setTempSchoolName] = useState('숭신고등학교');
   const [tempMandatory, setTempMandatory] = useState({
     '2-1': '',
     '2-2': '',
@@ -249,6 +255,7 @@ export default function App() {
   const [parsedData, setParsedData] = useState<{
     mandatory: Record<number, SungshinSubject[]>;
     groups: SelectionGroup[];
+    schoolName: string;
   } | null>(null);
   // 현재 반영하려는 교육과정을 "기본 교육과정"으로 지정할지 여부
   const [setAsDefaultCurriculum, setSetAsDefaultCurriculum] = useState(false);
@@ -269,6 +276,10 @@ export default function App() {
       setCustomGroups(saved.groups);
       setIsCustomMode(true);
       setHasDefaultCurriculum(true);
+      if (saved.schoolName) {
+        setSchoolName(saved.schoolName);
+        setTempSchoolName(saved.schoolName);
+      }
     }
   }, []);
 
@@ -321,113 +332,31 @@ export default function App() {
         reader.readAsDataURL(file);
       });
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: [
-          {
-            inlineData: {
-              mimeType: "application/pdf",
-              data: base64
-            }
-          },
-          {
-            text: `이 PDF 파일에서 고등학교 교육과정 정보를 추출해주세요. 
-            다음 정보를 찾아주세요:
-            1. 2학년 및 3학년 필수(지정) 과목 (1학기, 2학기 구분)
-            2. 2학년 및 3학년 선택 과목군 (몇 개 중 몇 개 선택인지, 과목 리스트)
-
-            결과는 반드시 다음 JSON 형식으로 응답해주세요:
-            {
-              "mandatory": {
-                "2": [{"name": "과목명", "semesters": [1, 2]}],
-                "3": [{"name": "과목명", "semesters": [1, 2]}]
-              },
-              "groups": [
-                {
-                  "grade": 2,
-                  "semester": "1학기",
-                  "selectCount": 3,
-                  "subjects": [{"name": "과목1", "semesters": [1]}, {"name": "과목2", "semesters": [1]}],
-                  "description": "2학년 1학기 선택군"
-                }
-              ]
-            }
-            
-            주의사항:
-            - 과목명은 정확하게 추출해주세요.
-            - semesters는 1학기면 [1], 2학기면 [2], 둘 다면 [1, 2]로 표시하세요.
-            - 선택군(groups)의 경우, '5개 중 3개 선택'과 같은 정보를 바탕으로 selectCount를 설정하세요.`
-          }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              mandatory: {
-                type: Type.OBJECT,
-                properties: {
-                  "2": {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        name: { type: Type.STRING },
-                        semesters: { type: Type.ARRAY, items: { type: Type.NUMBER } }
-                      },
-                      required: ["name", "semesters"]
-                    }
-                  },
-                  "3": {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        name: { type: Type.STRING },
-                        semesters: { type: Type.ARRAY, items: { type: Type.NUMBER } }
-                      },
-                      required: ["name", "semesters"]
-                    }
-                  }
-                },
-                required: ["2", "3"]
-              },
-              groups: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    grade: { type: Type.NUMBER },
-                    semester: { type: Type.STRING },
-                    selectCount: { type: Type.NUMBER },
-                    subjects: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          name: { type: Type.STRING },
-                          semesters: { type: Type.ARRAY, items: { type: Type.NUMBER } }
-                        },
-                        required: ["name", "semesters"]
-                      }
-                    },
-                    description: { type: Type.STRING }
-                  },
-                  required: ["grade", "semester", "selectCount", "subjects", "description"]
-                }
-              }
-            },
-            required: ["mandatory", "groups"]
-          }
-        }
+      const proxyResponse = await fetch(PDF_PARSE_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64 })
       });
 
-      const data = JSON.parse(response.text);
+      if (!proxyResponse.ok) {
+        throw new Error(`프록시 서버 응답 오류 (status: ${proxyResponse.status})`);
+      }
+
+      const geminiResult = await proxyResponse.json();
+      const rawText = geminiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) {
+        console.error('Unexpected proxy response shape:', geminiResult);
+        throw new Error('AI 응답에서 결과 텍스트를 찾을 수 없습니다.');
+      }
+
+      const data = JSON.parse(rawText);
       // Add IDs to groups
       data.groups = data.groups.map((g: any, idx: number) => ({
         ...g,
         id: `선택과목 ${idx + 1}`
       }));
+      // 학교명 입력란의 초기값은 현재 적용 중인 학교명으로 채워둔다.
+      data.schoolName = schoolName;
       
       setParsedData(data);
       setShowPdfReview(true);
@@ -452,15 +381,18 @@ export default function App() {
       ...g,
       subjects: g.subjects.filter(s => s.name.trim() !== '')
     }));
+    const finalSchoolName = parsedData.schoolName?.trim() || '숭신고등학교';
 
     setCustomMandatory(cleanedMandatory);
     setCustomGroups(cleanedGroups);
+    setSchoolName(finalSchoolName);
+    setTempSchoolName(finalSchoolName);
     setIsCustomMode(true);
     setShowPdfReview(false);
     setParsedData(null);
 
     if (setAsDefaultCurriculum) {
-      saveDefaultCurriculum({ mandatory: cleanedMandatory, groups: cleanedGroups });
+      saveDefaultCurriculum({ mandatory: cleanedMandatory, groups: cleanedGroups, schoolName: finalSchoolName });
       setHasDefaultCurriculum(true);
       setSetAsDefaultCurriculum(false);
     }
@@ -593,14 +525,23 @@ export default function App() {
       })).filter((s: any) => s.name !== '')
     }));
     setCustomGroups(newGroups);
+    const finalSchoolName = tempSchoolName.trim() || '숭신고등학교';
+    setSchoolName(finalSchoolName);
+    setTempSchoolName(finalSchoolName);
     setIsCustomMode(true);
     setShowCustomForm(false);
 
     if (setAsDefaultCurriculum) {
-      saveDefaultCurriculum({ mandatory: newMandatory, groups: newGroups });
+      saveDefaultCurriculum({ mandatory: newMandatory, groups: newGroups, schoolName: finalSchoolName });
       setHasDefaultCurriculum(true);
       setSetAsDefaultCurriculum(false);
     }
+  };
+
+  const closeCustomForm = () => {
+    setTempSchoolName(schoolName);
+    setShowCustomForm(false);
+    setSetAsDefaultCurriculum(false);
   };
 
   // All majors flattened for global search
@@ -1198,7 +1139,7 @@ export default function App() {
             )}
 
             <button 
-              onClick={() => setShowCustomForm(true)}
+              onClick={() => { setTempSchoolName(schoolName); setShowCustomForm(true); }}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0"
             >
               <Settings className="w-4 h-4" />
@@ -1236,10 +1177,15 @@ export default function App() {
                     setCustomMandatory(saved.mandatory);
                     setCustomGroups(saved.groups);
                     setIsCustomMode(true);
+                    const restoredName = saved.schoolName || '숭신고등학교';
+                    setSchoolName(restoredName);
+                    setTempSchoolName(restoredName);
                   } else {
                     setIsCustomMode(false);
                     setCustomGroups([]);
                     setCustomMandatory({});
+                    setSchoolName('숭신고등학교');
+                    setTempSchoolName('숭신고등학교');
                   }
                 }}
                 title={hasDefaultCurriculum ? '기본 교육과정으로 초기화합니다' : '입력한 교육과정을 초기화합니다'}
@@ -2211,6 +2157,17 @@ export default function App() {
                       )}
                       
                       <div className="flex flex-wrap items-center gap-2">
+                        {hasConsultantChanges && (
+                          <button
+                            type="button"
+                            onClick={handleResetConsultantChecks}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-colors"
+                            title="컨설턴트가 수정한 체크 내역을 초기화하고 AI 추천 상태로 복원합니다."
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            상담 체크 초기화
+                          </button>
+                        )}
                         <div className="flex bg-slate-100 p-1 rounded-lg">
                           <button 
                             onClick={() => setPlanGrade(2)}
@@ -2292,7 +2249,7 @@ export default function App() {
                           borderRadius: '9999px',
                           border: '1px solid rgba(255, 255, 255, 0.2)'
                         }}>
-                          숭신고등학교 | {selectedMajor.name} 전공 권장
+                          {schoolName} | {selectedMajor.name} 전공 권장
                         </div>
                       </div>
 
@@ -2306,49 +2263,6 @@ export default function App() {
                         gap: '0.65rem',
                         fontSize: '0.78rem'
                       }}>
-                        {/* Checkbox Status Legend */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.6rem', borderBottom: '1px dashed #cbd5e1', paddingBottom: '0.6rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: '800', color: '#0f172a' }}>[수강 체크 상태]</span>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#eff6ff', border: '1.8px solid #2563eb', padding: '0.22rem 0.65rem', borderRadius: '6px' }}>
-                              <Check style={{ width: '0.85rem', height: '0.85rem', color: '#2563eb', strokeWidth: 3 }} />
-                              <span style={{ fontWeight: '800', color: '#1d4ed8', fontSize: '0.76rem' }}>파란색 체크 : AI 권장 과목</span>
-                            </div>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#f0fdf4', border: '1.8px solid #16a34a', padding: '0.22rem 0.65rem', borderRadius: '6px' }}>
-                              <Check style={{ width: '0.85rem', height: '0.85rem', color: '#16a34a', strokeWidth: 3 }} />
-                              <span style={{ fontWeight: '800', color: '#15803d', fontSize: '0.76rem' }}>녹색 체크 : 컨설턴트 상담 선택 (클릭 시 변경)</span>
-                            </div>
-                            <span style={{ color: '#64748b', fontSize: '0.72rem' }}>
-                              * 학기 칸을 클릭하면 선택 상태를 자유롭게 조정할 수 있습니다.
-                            </span>
-                          </div>
-
-                          {hasConsultantChanges && (
-                            <button
-                              type="button"
-                              onClick={handleResetConsultantChecks}
-                              className="hover:bg-slate-200 transition-colors"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.35rem',
-                                padding: '0.3rem 0.7rem',
-                                borderRadius: '6px',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
-                                color: '#334155',
-                                backgroundColor: '#e2e8f0',
-                                border: '1px solid #cbd5e1',
-                                cursor: 'pointer'
-                              }}
-                              title="컨설턴트가 수정한 체크 내역을 초기화하고 AI 추천 상태로 복원합니다."
-                            >
-                              <RotateCcw style={{ width: '0.75rem', height: '0.75rem' }} />
-                              상담 체크 초기화
-                            </button>
-                          )}
-                        </div>
-
                         {/* Subject Classification Legend */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: '800', color: '#1e293b' }}>[과목 구분]</span>
@@ -2801,6 +2715,22 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                  {/* School Name */}
+                  <section className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-slate-400" />
+                      학교명
+                    </label>
+                    <input
+                      type="text"
+                      value={parsedData.schoolName}
+                      onChange={(e) => setParsedData({ ...parsedData, schoolName: e.target.value })}
+                      placeholder="예: 숭신고등학교"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-400 transition-colors"
+                    />
+                    <p className="text-xs text-slate-400">여기에 입력한 학교명이 수강 신청 계획서 상단에 표시됩니다.</p>
+                  </section>
+
                   {/* Mandatory Subjects */}
                   <section className="space-y-4">
                     <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -2994,7 +2924,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowCustomForm(false)}
+              onClick={closeCustomForm}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
             <motion.div 
@@ -3014,7 +2944,7 @@ export default function App() {
                   </div>
                 </div>
                 <button 
-                  onClick={() => setShowCustomForm(false)}
+                  onClick={closeCustomForm}
                   className="p-2 hover:bg-slate-200 rounded-full transition-colors"
                 >
                   <X className="w-5 h-5 text-slate-400" />
@@ -3022,6 +2952,22 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* School Name */}
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4 text-slate-400" />
+                    학교명
+                  </label>
+                  <input
+                    type="text"
+                    value={tempSchoolName}
+                    onChange={(e) => setTempSchoolName(e.target.value)}
+                    placeholder="예: 숭신고등학교"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:bg-white focus:border-blue-400 transition-colors"
+                  />
+                  <p className="text-xs text-slate-400">여기에 입력한 학교명이 수강 신청 계획서 상단에 표시됩니다.</p>
+                </div>
+
                 {/* Mandatory Subjects Section */}
                 <div className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -3168,7 +3114,7 @@ export default function App() {
                 </label>
                 <div className="flex items-center justify-end gap-3">
                   <button 
-                    onClick={() => { setShowCustomForm(false); setSetAsDefaultCurriculum(false); }}
+                    onClick={closeCustomForm}
                     className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-700"
                   >
                     취소
