@@ -757,6 +757,49 @@ export default function App() {
     return grouped;
   }, [selectedMajor]);
 
+  // 대학별 권장과목 텍스트("화학, 생명과학" 등)에서 과목명만 뽑아낸다.
+  // "적극 이수", "자신의 진로에 맞게" 같은 서술형 안내 문구는 특정 과목을 지정한 것이 아니므로 제외한다.
+  const parseTipSubjectNames = (rawText: string): string[] => {
+    if (!rawText || rawText === '-' || rawText.trim() === '') return [];
+    const isDescriptive = rawText.includes('적극 이수') ||
+                          rawText.includes('자신의 진로') ||
+                          rawText.includes('제시하지 않은') ||
+                          rawText.includes('선택 이수');
+    if (isDescriptive) return [];
+    return rawText
+      .split(/[,/]/)
+      .map(s => s.replace(/\([^)]*\)/g, '').trim())
+      .filter(Boolean);
+  };
+
+  // 현재 선택된 학과와 관련된 대학들 중, 과목별로 "핵심과목"/"권장과목"으로 지정한 대학 목록을 매핑한다.
+  // key: 정규화된 과목명 -> [{ university, type }]
+  const subjectUniversityMap = useMemo(() => {
+    const map: Record<string, { university: string; type: 'core' | 'recommended' }[]> = {};
+    if (!selectedMajor) return map;
+
+    UNIVERSITY_TIPS.forEach(tip => {
+      if (!isMajorMatch(selectedMajor.name, tip.major)) return;
+
+      const addEntries = (rawText: string, type: 'core' | 'recommended') => {
+        parseTipSubjectNames(rawText).forEach(subjectPart => {
+          const key = normalizeSubjectName(subjectPart);
+          if (!key) return;
+          if (!map[key]) map[key] = [];
+          const alreadyExists = map[key].some(e => e.university === tip.university && e.type === type);
+          if (!alreadyExists) {
+            map[key].push({ university: tip.university, type });
+          }
+        });
+      };
+
+      addEntries(tip.core, 'core');
+      addEntries(tip.recommended, 'recommended');
+    });
+
+    return map;
+  }, [selectedMajor]);
+
   const handleFieldSelect = (field: Field) => {
     setSelectedField(field);
     setSelectedMajor(null);
@@ -1030,6 +1073,23 @@ export default function App() {
     return Object.keys(consultantChecks).length > 0;
   }, [consultantChecks]);
 
+  // 파란색(AI 추천) 체크에 마우스를 올렸을 때 보여줄 안내문을 만든다.
+  // 관련 대학이 있으면 "대학명(핵심/권장)" 형태로, 없으면 일반 안내 문구로 대체한다.
+  const buildAiCheckTooltip = (subjectName: string, semester: number) => {
+    const entries = subjectUniversityMap[normalizeSubjectName(subjectName)];
+    if (!entries || entries.length === 0) {
+      return `${subjectName} ${semester}학기: AI 추천 과목 (특정 대학 지정 정보 없음 / 클릭 시 체크 해제)`;
+    }
+
+    const MAX_SHOWN = 8;
+    const shown = entries.slice(0, MAX_SHOWN);
+    const lines = shown.map(e => `${e.university} (${e.type === 'core' ? '핵심과목' : '권장과목'})`);
+    const remaining = entries.length - shown.length;
+    const header = `${subjectName} ${semester}학기 — 대학별 지정 현황`;
+    const footer = remaining > 0 ? `\n외 ${remaining}개 대학` : '';
+    return `${header}\n${lines.join('\n')}${footer}\n(클릭 시 체크 해제)`;
+  };
+
   const renderSemesterCheckbox = (
     grade: number,
     groupId: string,
@@ -1048,7 +1108,7 @@ export default function App() {
         }}
         title={
           state === 'ai'
-            ? `${subjectName} ${semester}학기: AI 추천 과목 (파란색 체크 / 클릭 시 체크 해제)`
+            ? buildAiCheckTooltip(subjectName, semester)
             : state === 'consultant'
             ? `${subjectName} ${semester}학기: 컨설턴트 상담 선택 (녹색 체크 / 클릭 시 해제)`
             : `${subjectName} ${semester}학기: 미선택 (클릭하여 컨설턴트 녹색 체크)`
