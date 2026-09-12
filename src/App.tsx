@@ -775,7 +775,7 @@ export default function App() {
   // 현재 선택된 학과와 관련된 대학들 중, 과목별로 "핵심과목"/"권장과목"으로 지정한 대학 목록을 매핑한다.
   // key: 정규화된 과목명 -> [{ university, type }]
   const subjectUniversityMap = useMemo(() => {
-    const map: Record<string, { university: string; type: 'core' | 'recommended' }[]> = {};
+    const map: Record<string, { university: string; major: string; type: 'core' | 'recommended' }[]> = {};
     if (!selectedMajor) return map;
 
     UNIVERSITY_TIPS.forEach(tip => {
@@ -786,9 +786,9 @@ export default function App() {
           const key = normalizeSubjectName(subjectPart);
           if (!key) return;
           if (!map[key]) map[key] = [];
-          const alreadyExists = map[key].some(e => e.university === tip.university && e.type === type);
+          const alreadyExists = map[key].some(e => e.university === tip.university && e.major === tip.major && e.type === type);
           if (!alreadyExists) {
-            map[key].push({ university: tip.university, type });
+            map[key].push({ university: tip.university, major: tip.major, type });
           }
         });
       };
@@ -1083,7 +1083,7 @@ export default function App() {
 
     const MAX_SHOWN = 8;
     const shown = entries.slice(0, MAX_SHOWN);
-    const lines = shown.map(e => `${e.university} (${e.type === 'core' ? '핵심과목' : '권장과목'})`);
+    const lines = shown.map(e => `${e.university} ${e.major} (${e.type === 'core' ? '핵심과목' : '권장과목'})`);
     const remaining = entries.length - shown.length;
     const header = `${subjectName} ${semester}학기 — 대학별 지정 현황`;
     const footer = remaining > 0 ? `\n외 ${remaining}개 대학` : '';
