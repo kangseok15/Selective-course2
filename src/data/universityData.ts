@@ -4949,7 +4949,7 @@ export const UNIVERSITY_TIPS: UniversityTip[] = [
   {
     "region": "수도권",
     "location": "경기",
-    "university": "간호대학",
+    "university": "아주대",
     "major": "간호학과",
     "core": "생명과학",
     "recommended": "화학, 세포와 물질대사, 생물의 유전"
