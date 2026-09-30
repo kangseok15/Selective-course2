@@ -357,13 +357,14 @@ export const MANDATORY_SUBJECTS: Record<number, SungshinSubject[]> = {
     { name: '문학', semesters: [1] },
     { name: '대수', semesters: [1] },
     { name: '영어Ⅰ', semesters: [1] },
-    { name: '운동과 건강', semesters: [1] },
-    { name: '기술·가정', semesters: [1, 2] },
+    { name: '기술·가정', semesters: [1] },
+    { name: '스포츠 생활1', semesters: [1] },
     { name: '언어생활과 한자', semesters: [1, 2] },
     { name: '독서와 작문', semesters: [2] },
     { name: '미적분Ⅰ', semesters: [2] },
     { name: '영어Ⅱ', semesters: [2] },
-    { name: '스포츠 생활1', semesters: [2] }
+    { name: '음악', semesters: [2] },
+    { name: '스포츠 생활2', semesters: [2] }
   ],
   3: [
     { name: '화법과 언어', semesters: [1] },
