@@ -1921,8 +1921,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* 학점 규정 자동 판별기 - "대학별 권장과목" 탭을 제외한 모든 탭 상단에 표시 */}
-            {viewMode !== 'university' && graduationCreditCheck && (() => {
+            {/* 학점 규정 자동 판별기 - "수강신청 계획서" 탭에서만 상단에 표시 */}
+            {viewMode === 'plan' && graduationCreditCheck && (() => {
                   const gc = graduationCreditCheck;
                   const anyIssue = !gc.foundationOk || !gc.societyOk || !gc.scienceOk || !gc.peOk || !gc.artOk || !gc.etcOk;
                   const inquiryOk = gc.societyOk && gc.scienceOk;
