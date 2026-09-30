@@ -43,6 +43,8 @@ import {
   SUBJECT_TYPES, 
   SUNGSHIN_GROUPS, 
   MANDATORY_SUBJECTS, 
+  GRADE1_COMMON_SUBJECTS,
+  getSubjectCredit,
   Major, 
   Field, 
   SelectionGroup, 
@@ -226,7 +228,7 @@ export default function App() {
   const [selectedMajor, setSelectedMajor] = useState<Major | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [fieldSearchTerm, setFieldSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'plan' | 'subject' | 'group'>('plan');
+  const [viewMode, setViewMode] = useState<'plan' | 'subject' | 'group' | 'credit-check'>('plan');
   const [planGrade, setPlanGrade] = useState<2 | 3>(2);
   const [selectedSubjectModal, setSelectedSubjectModal] = useState<SubjectDetail | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -1073,6 +1075,108 @@ export default function App() {
     return Object.keys(consultantChecks).length > 0;
   }, [consultantChecks]);
 
+  // 교과 영역명을 학점 규정 판별기가 쓰는 버킷으로 묶는다.
+  // 기술·가정/정보와 제2외국어/한문·교양은 규정상 하나의 최소이수학점(10학점) 기준을 공유하므로 따로 집계한다.
+  const getCreditBucket = (area: string | undefined): 'korean' | 'math' | 'english' | 'koreanHistory' | 'society' | 'science' | 'pe' | 'art' | 'techInfo' | 'langEtc' | null => {
+    switch (area) {
+      case '국어': return 'korean';
+      case '수학': return 'math';
+      case '영어': return 'english';
+      case '한국사': return 'koreanHistory';
+      case '사회': return 'society';
+      case '과학': return 'science';
+      case '체육': return 'pe';
+      case '예술': return 'art';
+      case '기술·가정/정보': return 'techInfo';
+      case '제2외국어/한문':
+      case '교양':
+        return 'langEtc';
+      default: return null;
+    }
+  };
+
+  const findSubjectArea = (subjectName: string): string | undefined => {
+    const normalized = normalizeSubjectName(subjectName);
+    return Object.keys(SUBJECT_AREAS).find(a => SUBJECT_AREAS[a].some(s => normalizeSubjectName(s) === normalized));
+  };
+
+  // 1학년(공통, 전교생 고정) + 2·3학년 필수 + 2·3학년 선택과목 중 실제로 체크(선택)된 과목만 합산해
+  // 일반고 졸업/이수학점 규정 충족 여부를 계산한다.
+  const graduationCreditCheck = useMemo(() => {
+    if (!selectedMajor) return null;
+
+    const totals: Record<string, number> = {
+      korean: 0, math: 0, english: 0, koreanHistory: 0, society: 0,
+      science: 0, pe: 0, art: 0, techInfo: 0, langEtc: 0
+    };
+
+    const addCredit = (bucket: string | null, credit: number) => {
+      if (!bucket) return;
+      totals[bucket] = (totals[bucket] || 0) + credit;
+    };
+
+    // 1학년 공통과목 (전교생 고정)
+    GRADE1_COMMON_SUBJECTS.forEach(s => {
+      const bucket = getCreditBucket(s.area);
+      addCredit(bucket, s.credits);
+    });
+
+    // 2·3학년 필수(지정) 과목 - 전공과 무관하게 전교생 공통
+    [2, 3].forEach(grade => {
+      (MANDATORY_SUBJECTS[grade] || []).forEach(s => {
+        const bucket = getCreditBucket(findSubjectArea(s.name));
+        addCredit(bucket, getSubjectCredit(s.name));
+      });
+    });
+
+    // 2·3학년 선택과목 - 학생이 실제로 체크(선택)한 과목만 반영
+    [2, 3].forEach(grade => {
+      const groups = (isCustomMode ? customGroups : SUNGSHIN_GROUPS).filter(g => g.grade === grade);
+      groups.forEach(group => {
+        group.subjects.forEach(subject => {
+          const isRecommended = selectedMajor.recommendedSubjects.some(r => normalizeSubjectName(r) === normalizeSubjectName(subject.name));
+          const isChecked = subject.semesters.some(sem => getCellCheckState(grade, group.id, subject.name, sem, isRecommended) !== 'off');
+          if (!isChecked) return;
+          const bucket = getCreditBucket(findSubjectArea(subject.name));
+          addCredit(bucket, group.credits || getSubjectCredit(subject.name));
+        });
+      });
+    });
+
+    const foundationTotal = totals.korean + totals.math + totals.english;
+    const societyTotal = totals.koreanHistory + totals.society;
+    const etcTotal = totals.techInfo + totals.langEtc;
+
+    const FOUNDATION_CAP = 81;
+    const SOCIETY_MIN = 14;
+    const SCIENCE_MIN = 10;
+    const PE_MIN = 10;
+    const ART_MIN = 10;
+    const ETC_MIN = 10;
+
+    return {
+      totals,
+      foundationTotal,
+      foundationCap: FOUNDATION_CAP,
+      foundationOk: foundationTotal <= FOUNDATION_CAP,
+      societyTotal,
+      societyMin: SOCIETY_MIN,
+      societyOk: societyTotal >= SOCIETY_MIN,
+      scienceTotal: totals.science,
+      scienceMin: SCIENCE_MIN,
+      scienceOk: totals.science >= SCIENCE_MIN,
+      peTotal: totals.pe,
+      peMin: PE_MIN,
+      peOk: totals.pe >= PE_MIN,
+      artTotal: totals.art,
+      artMin: ART_MIN,
+      artOk: totals.art >= ART_MIN,
+      etcTotal,
+      etcMin: ETC_MIN,
+      etcOk: etcTotal >= ETC_MIN
+    };
+  }, [selectedMajor, isCustomMode, customGroups, consultantChecks]);
+
   // 파란색(AI 추천) 체크에 마우스를 올렸을 때 보여줄 안내문을 만든다.
   // 관련 대학이 있으면 "대학명(핵심/권장)" 형태로, 없으면 일반 안내 문구로 대체한다.
   const buildAiCheckTooltip = (subjectName: string, semester: number) => {
@@ -1185,7 +1289,7 @@ export default function App() {
             {hasDefaultCurriculum && (
               <button
                 onClick={() => {
-                  if (confirm('기본 교육과정 설정을 해제하시겠습니까?\n해제 후 초기화하면 원래 성신 교육과정으로 돌아갑니다.')) {
+                  if (confirm('기본 교육과정 설정을 해제하시겠습니까?\n해제 후 초기화하면 원래 숭신 교육과정으로 돌아갑니다.')) {
                     clearDefaultCurriculum();
                     setHasDefaultCurriculum(false);
                   }
@@ -1750,6 +1854,17 @@ export default function App() {
                     <Calendar className="w-4 h-4" />
                     <span>선택그룹</span>
                   </button>
+                  <button 
+                    onClick={() => setViewMode('credit-check')}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      viewMode === 'credit-check' 
+                        ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    <span>학점 규정 체크</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -2194,6 +2309,166 @@ export default function App() {
                     </motion.div>
                   );
                 })
+              ) : viewMode === 'credit-check' && graduationCreditCheck ? (
+                /* 학점 규정 자동 판별기 */
+                (() => {
+                  const gc = graduationCreditCheck;
+                  const anyIssue = !gc.foundationOk || !gc.societyOk || !gc.scienceOk || !gc.peOk || !gc.artOk || !gc.etcOk;
+                  const inquiryOk = gc.societyOk && gc.scienceOk;
+                  const lifeOk = gc.peOk && gc.artOk && gc.etcOk;
+
+                  const StatusBadge = ({ ok, okText = '정상 준수', badText }: { ok: boolean; okText?: string; badText: string }) => (
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
+                      ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
+                      {ok ? okText : badText}
+                    </span>
+                  );
+
+                  const Gauge = ({ value, max, ok }: { value: number; max: number; ok: boolean }) => (
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${ok ? 'bg-blue-600' : 'bg-amber-500'}`}
+                        style={{ width: `${Math.min(100, (value / max) * 100)}%` }}
+                      />
+                    </div>
+                  );
+
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
+                    >
+                      {/* Header */}
+                      <div className="bg-gradient-to-r from-slate-900 to-indigo-900 px-6 py-5 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
+                            <GraduationCap className="text-white w-6 h-6" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-white font-black text-lg">2022 개정 이수 학점 규정 자동 판별기</h3>
+                              <span className="text-[11px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                {schoolName} [일반고 모드]
+                              </span>
+                            </div>
+                            <p className="text-slate-300 text-xs mt-0.5">
+                              1학년 공통과목(고정) + 2·3학년 필수·선택 이수 현황을 반영해 고교학점제 이수학점 규정을 자동 검증합니다.
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap flex items-center gap-1.5 ${
+                          anyIssue ? 'bg-red-500/15 text-red-200 border border-red-400/30' : 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/30'
+                        }`}>
+                          {anyIssue ? <Info className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          {anyIssue ? '집중 점검 필요' : '이수 기준 충족'}
+                        </span>
+                      </div>
+
+                      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        {/* Card 1: 기초교과 상한제 */}
+                        <div className="border border-slate-200 rounded-2xl p-5 flex flex-col">
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-sm">
+                              <BookOpen className="w-4 h-4 text-slate-400" />
+                              기초교과(국·영·수) 총량 상한제
+                            </h4>
+                            <StatusBadge ok={gc.foundationOk} badText="초과" />
+                          </div>
+                          <div className="flex items-baseline gap-1.5 mb-2">
+                            <span className={`text-3xl font-black ${gc.foundationOk ? 'text-slate-900' : 'text-red-600'}`}>{gc.foundationTotal}</span>
+                            <span className="text-xs text-slate-400 font-bold">/ 최대 {gc.foundationCap}학점 (상한)</span>
+                          </div>
+                          <Gauge value={gc.foundationTotal} max={gc.foundationCap} ok={gc.foundationOk} />
+                          <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
+                            국어({gc.totals.korean}학점), 수학({gc.totals.math}학점), 영어({gc.totals.english}학점) 합산({gc.foundationTotal}학점)이 교과 이수 총합 {gc.foundationCap}학점을 넘지 않아야 합니다.
+                          </p>
+                        </div>
+
+                        {/* Card 2: 탐구(사회·과학) 균형 이수제 */}
+                        <div className="border border-slate-200 rounded-2xl p-5 flex flex-col">
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-sm">
+                              <Compass className="w-4 h-4 text-slate-400" />
+                              탐구(사회·과학) 균형 이수제
+                            </h4>
+                            <StatusBadge ok={inquiryOk} badText="이수 보완" />
+                          </div>
+                          <div className="space-y-3 flex-1">
+                            <div>
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="text-xs font-bold text-slate-700">사회(한국사 포함): <span className="text-slate-900">{gc.societyTotal}학점</span></span>
+                                <span className={`text-[11px] font-bold whitespace-nowrap ${gc.societyOk ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                  {gc.societyOk ? `기준 ${gc.societyMin}학점 (충족)` : `기준 ${gc.societyMin}학점 (${gc.societyMin - gc.societyTotal}학점 부족)`}
+                                </span>
+                              </div>
+                              <Gauge value={gc.societyTotal} max={gc.societyMin} ok={gc.societyOk} />
+                              <p className="text-[10px] text-slate-400 mt-1">한국사 {gc.totals.koreanHistory}학점 + 사회 {gc.totals.society}학점</p>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="text-xs font-bold text-slate-700">과학(실험 포함): <span className="text-slate-900">{gc.scienceTotal}학점</span></span>
+                                <span className={`text-[11px] font-bold whitespace-nowrap ${gc.scienceOk ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                  {gc.scienceOk ? `기준 ${gc.scienceMin}학점 (충족)` : `기준 ${gc.scienceMin}학점 (${gc.scienceMin - gc.scienceTotal}학점 부족)`}
+                                </span>
+                              </div>
+                              <Gauge value={gc.scienceTotal} max={gc.scienceMin} ok={gc.scienceOk} />
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
+                            일반고 규정: 사회(한국사 포함) {gc.societyMin}학점, 과학 {gc.scienceMin}학점 이상을 반드시 이수해야 합니다.
+                          </p>
+                        </div>
+
+                        {/* Card 3: 체육·예술 & 생활·교양 */}
+                        <div className="border border-slate-200 rounded-2xl p-5 flex flex-col">
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <h4 className="font-bold text-slate-800 flex items-center gap-1.5 text-sm">
+                              <Sparkles className="w-4 h-4 text-slate-400" />
+                              체육·예술 & 생활·교양 영역
+                            </h4>
+                            <StatusBadge ok={lifeOk} badText="점검 필요" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            <div className={`rounded-xl p-3 border ${gc.peOk ? 'bg-emerald-50/60 border-emerald-100' : 'bg-amber-50/60 border-amber-100'}`}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-600">체육 교과</span>
+                                <span className={`text-[10px] font-bold ${gc.peOk ? 'text-emerald-600' : 'text-amber-600'}`}>{gc.peOk ? '충족' : '부족'}</span>
+                              </div>
+                              <div className="text-lg font-black text-slate-900 mt-0.5">{gc.peTotal}<span className="text-[11px] text-slate-400 font-bold"> / 기준 {gc.peMin}학점</span></div>
+                            </div>
+                            <div className={`rounded-xl p-3 border ${gc.artOk ? 'bg-emerald-50/60 border-emerald-100' : 'bg-amber-50/60 border-amber-100'}`}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-600">예술 교과</span>
+                                <span className={`text-[10px] font-bold ${gc.artOk ? 'text-emerald-600' : 'text-amber-600'}`}>{gc.artOk ? '충족' : '부족'}</span>
+                              </div>
+                              <div className="text-lg font-black text-slate-900 mt-0.5">{gc.artTotal}<span className="text-[11px] text-slate-400 font-bold"> / 기준 {gc.artMin}학점</span></div>
+                            </div>
+                          </div>
+                          <div className={`rounded-xl p-3 border ${gc.etcOk ? 'bg-emerald-50/60 border-emerald-100' : 'bg-amber-50/60 border-amber-100'}`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-bold text-slate-600">기술·가정/정보/제2외국어/한문/교양</span>
+                              <span className={`text-[10px] font-bold whitespace-nowrap ${gc.etcOk ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {gc.etcOk ? '충족' : `${gc.etcMin - gc.etcTotal}학점 부족`}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-lg font-black text-slate-900">{gc.etcTotal}<span className="text-[11px] text-slate-400 font-bold"> / 기준 {gc.etcMin}학점</span></span>
+                              <span className="text-[10px] text-slate-400">기가정보 {gc.totals.techInfo} + 외국어·한문·교양 {gc.totals.langEtc}</span>
+                            </div>
+                            <div className="mt-2">
+                              <Gauge value={gc.etcTotal} max={gc.etcMin} ok={gc.etcOk} />
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-4 leading-relaxed">
+                            일반고 규정: 체육 {gc.peMin}학점, 예술 {gc.artMin}학점, 기술·가정/정보/제2외국어/한문/교양 {gc.etcMin}학점 이상을 충족해야 합니다.
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })()
               ) : (
                 /* Course Registration Plan View (Table Format) */
                 <div className="space-y-4">
