@@ -1095,7 +1095,15 @@ export default function App() {
     }
   };
 
+  // "기술·가정↔음악"처럼 두 과목이 학기별로 번갈아 편성되어 하나의 이름으로 합쳐진 과목은
+  // SUBJECT_AREAS에서 직접 찾을 수 없으므로, 편성표상 실제 소속 교과(군)를 그대로 지정한다.
+  const MERGED_SUBJECT_AREA_OVERRIDES: Record<string, string> = {
+    '기술·가정↔음악': '기술·가정/정보',
+    '정보↔미술': '예술'
+  };
+
   const findSubjectArea = (subjectName: string): string | undefined => {
+    if (MERGED_SUBJECT_AREA_OVERRIDES[subjectName]) return MERGED_SUBJECT_AREA_OVERRIDES[subjectName];
     const normalized = normalizeSubjectName(subjectName);
     return Object.keys(SUBJECT_AREAS).find(a => SUBJECT_AREAS[a].some(s => normalizeSubjectName(s) === normalized));
   };
