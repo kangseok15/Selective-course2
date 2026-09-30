@@ -1921,8 +1921,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* 학점 규정 자동 판별기 - 탭과 무관하게 항상 상단에 표시 */}
-            {graduationCreditCheck && (() => {
+            {/* 학점 규정 자동 판별기 - "대학별 권장과목" 탭을 제외한 모든 탭 상단에 표시 */}
+            {viewMode !== 'university' && graduationCreditCheck && (() => {
                   const gc = graduationCreditCheck;
                   const anyIssue = !gc.foundationOk || !gc.societyOk || !gc.scienceOk || !gc.peOk || !gc.artOk || !gc.etcOk;
                   const inquiryOk = gc.societyOk && gc.scienceOk;
@@ -1959,7 +1959,7 @@ export default function App() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-white font-black text-lg">2022 개정 이수 학점 규정 자동 판별기</h3>
+                              <h3 className="text-white font-black text-lg">2022 개정 이수학점 검증</h3>
                               <span className="text-[11px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30 px-2 py-0.5 rounded-full whitespace-nowrap">
                                 {schoolName} [일반고 모드]
                               </span>
