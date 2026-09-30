@@ -25,7 +25,7 @@ export const SUBJECT_AREAS: Record<string, string[]> = {
   '과학': ['물리학', '화학', '생명과학', '지구과학', '역학과 에너지', '전자기와 양자', '물질과 에너지', '화학 반응의 세계', '세포와 물질대사', '생물의 유전', '지구시스템과학', '행성우주과학', '과학의 역사와 문화', '기후변화와 환경생태', '융합과학 탐구', '고급 물리학', '고급 화학', '고급 생명과학', '고급 지구과학', '과학과제 연구', '물리학 실험', '화학 실험', '생명과학 실험', '지구과학 실험'],
   '체육': ['체육1', '체육2', '운동과 건강', '스포츠 문화', '스포츠 문학', '스포츠 과학', '스포츠 생활1', '스포츠 생활2', '스포츠 개론', '육상', '체조', '수상 스포츠', '기초 체육 전공 실기', '심화 체육 전공 실기', '고급 체육 전공 실기', '스포츠 경기 체력', '스포츠 경기 기술', '스포츠 경기 분석', '스포츠 교육', '스포츠 생리의학', '스포츠 행정 및 경영'],
   '예술': ['음악', '미술', '연극', '음악 연주와 창작', '음악 감상과 비평', '미술 창작', '미술 감상과 비평', '음악과 미디어', '미술과 매체', '음악 이론', '음악사', '시창·청음', '음악 전공 실기', '합창·합주', '음악 공연 실습', '음악과 문화', '미술 이론', '드로잉', '미술사', '미술 전공 실기', '조형 탐구', '미술 매체 탐구', '미술과 사회', '무용의 이해', '무용과 몸', '무용 기초 실기', '무용 전공 실기', '안무', '무용 제작 실습', '무용 감상과 비평', '무용과 매체', '문예 창작의 이해', '문장론', '문학 감상과 비평', '시 창작', '소설 창작', '극 창작', '문학과 매체', '연극과 몸', '연극과 말', '연기', '무대 미술과 기술', '연극 제작 실습', '연극 감상과 비평', '연극과 삶', '영화의 이해', '촬영·조명', '편집·사운드', '영화 제작 실습', '영화 감상과 비평', '영화와 삶', '사진의 이해', '사진 촬영', '사진 표현 기법', '영상 제작의 이해', '사진 감상과 비평', '사진과 삶'],
-  '기술·가정/정보': ['기술·가정', '로봇과 공학세계', '생활과학 탐구', '창의 공학 설계', '지식 재산 일반', '생애 설계와 자립', '아동발달과 부모', '정보', '인공지능 기초', '데이터 과학', '소프트웨어와 생활', '정보과학', '인공지능과 피지컬 컴퓨팅', '사물인터넷과 센서 제어', '정보와 디지털 문해력'],
+  '기술·가정/정보': ['기술·가정', '로봇과 공학세계', '생활과학 탐구', '창의 공학 설계', '지식 재산 일반', '생애 설계와 자립', '아동발달과 부모', '정보', '인공지능 기초', '데이터 과학', '소프트웨어와 생활', '정보과학', '인공지능과 피지컬 컴퓨팅', '사물인터넷과 센서 제어', '정보와 디지털 문해력', '인공지능 생활 탐구'],
   '제2외국어/한문': ['독일어', '프랑스어', '스페인어', '중국어', '일본어', '러시아어', '아랍어', '베트남어', '한문', '한문 고전 읽기', '언어생활과 한자', '심화 독일어', '심화 프랑스어', '심화 스페인어', '심화 중국어', '심화 일본어', '심화 러시아어', '심화 아랍어', '심화 베트남어', '독일어 회화', '프랑스어 회화', '스페인어 회화', '중국어 회화', '일본어 회화', '러시아어 회화', '아랍어 회화', '베트남어 회화', '독일어권 문화', '프랑스어권 문화', '스페인어권 문화', '중국 문화', '일본 문화', '러시아 문화', '아랍 문화', '베트남 문화', '전공 기초 제2외국어', '제2외국어 회화Ⅰ', '제2외국어 회화Ⅱ', '제2외국어 독해와 작문Ⅰ', '제2외국어 독해와 작문Ⅱ', '심화 제2외국어', '제2외국어권 문화'],
   '교양': ['진로와 직업', '생태와 환경', '인간과 철학', '논리와 사고', '인간과 심리', '교육의 이해', '삶과 종교', '보건', '인간과 경제활동', '논술']
 };
@@ -63,7 +63,7 @@ export const SUBJECT_TYPES: Record<string, SelectionType> = {
   '기술·가정': '일반', '정보': '일반',
   '로봇과 공학세계': '진로', '생활과학 탐구': '진로', '인공지능 기초': '진로', '데이터 과학': '진로',
   '창의 공학 설계': '융합', '지식 재산 일반': '융합', '생애 설계와 자립': '융합', '아동발달과 부모': '융합', '소프트웨어와 생활': '융합',
-  '인공지능과 피지컬 컴퓨팅': '융합', '사물인터넷과 센서 제어': '융합', '정보와 디지털 문해력': '융합',
+  '인공지능과 피지컬 컴퓨팅': '융합', '사물인터넷과 센서 제어': '융합', '정보와 디지털 문해력': '융합', '인공지능 생활 탐구': '융합',
   // 제2외국어/한문
   '독일어': '일반', '프랑스어': '일반', '스페인어': '일반', '중국어': '일반', '일본어': '일반', '러시아어': '일반', '아랍어': '일반', '베트남어': '일반', '한문': '일반',
   '심화 독일어': '진로', '심화 프랑스어': '진로', '심화 스페인어': '진로', '심화 중국어': '진로', '심화 일본어': '진로', '심화 러시아어': '진로', '심화 아랍어': '진로', '심화 베트남어': '진로',
@@ -230,11 +230,13 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
     semester: '1학기',
     selectCount: 1,
     subjects: [
+      { name: '인공지능과 피지컬 컴퓨팅', semesters: [1] },
       { name: '중국어', semesters: [1] },
-      { name: '스페인어', semesters: [1] },
-      { name: '인공지능과 피지컬 컴퓨팅', semesters: [1] }
+      { name: '독일어', semesters: [1] },
+      { name: '한문', semesters: [1] }
     ],
-    description: '2학년 1학기 선택과목군 1 (택1)'
+    description: '2학년 1학기 선택과목군 1 (택1)',
+    credits: 3
   },
   {
     id: '선택군2',
@@ -244,17 +246,16 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
     subjects: [
       { name: '주제 탐구 독서', semesters: [1] },
       { name: '인공지능 수학', semesters: [1] },
-      { name: '인공지능 기초', semesters: [1] },
       { name: '세계시민과 지리', semesters: [1] },
       { name: '세계사', semesters: [1] },
       { name: '사회와 문화', semesters: [1] },
-      { name: '정치', semesters: [1] },
       { name: '현대사회와 윤리', semesters: [1] },
+      { name: '정치', semesters: [1] },
       { name: '물리학', semesters: [1] },
       { name: '화학', semesters: [1] },
       { name: '생명과학', semesters: [1] },
       { name: '기후변화와 환경생태', semesters: [1] },
-      { name: '미술 창작', semesters: [1] }
+      { name: '인공지능 기초', semesters: [1] }
     ],
     description: '2학년 1학기 선택과목군 2 (택3)',
     credits: 3
@@ -266,11 +267,13 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
     selectCount: 1,
     subjects: [
       { name: '기하', semesters: [2] },
+      { name: '사물인터넷과 센서 제어', semesters: [2] },
       { name: '중국어 회화', semesters: [2] },
-      { name: '스페인어 회화', semesters: [2] },
-      { name: '사물인터넷과 센서 제어', semesters: [2] }
+      { name: '독일어 회화', semesters: [2] },
+      { name: '언어생활과 한자', semesters: [2] }
     ],
-    description: '2학년 2학기 선택과목군 3 (택1)'
+    description: '2학년 2학기 선택과목군 3 (택1)',
+    credits: 3
   },
   {
     id: '선택군4',
@@ -279,7 +282,6 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
     selectCount: 3,
     subjects: [
       { name: '문학과 영상', semesters: [2] },
-      { name: '인공지능 기초', semesters: [2] },
       { name: '한국지리 탐구', semesters: [2] },
       { name: '동아시아 역사 기행', semesters: [2] },
       { name: '법과 사회', semesters: [2] },
@@ -289,7 +291,7 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
       { name: '물질과 에너지', semesters: [2] },
       { name: '세포와 물질대사', semesters: [2] },
       { name: '지구과학', semesters: [2] },
-      { name: '미술 창작', semesters: [2] }
+      { name: '소프트웨어와 생활', semesters: [2] }
     ],
     description: '2학년 2학기 선택과목군 4 (택3)',
     credits: 3
@@ -308,15 +310,13 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
       { name: '전자기와 양자', semesters: [1] },
       { name: '화학 반응의 세계', semesters: [1] },
       { name: '생물의 유전', semesters: [1] },
-      { name: '행성우주과학', semesters: [1] },
       { name: '지구시스템과학', semesters: [1] },
       { name: '데이터 과학', semesters: [1] },
-      { name: '스포츠 생활2', semesters: [1] },
-      { name: '음악 감상과 비평', semesters: [1] },
       { name: '미술과 매체', semesters: [1] },
       { name: '교육의 이해', semesters: [1] }
     ],
-    description: '3학년 1학기 선택과목군 5 (택4)'
+    description: '3학년 1학기 선택과목군 5 (택4)',
+    credits: 4
   },
   {
     id: '선택군6',
@@ -325,18 +325,19 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
     selectCount: 5,
     subjects: [
       { name: '매체 의사소통', semesters: [2] },
+      { name: '영미 문학 읽기', semesters: [2] },
       { name: '사회문제 탐구', semesters: [2] },
       { name: '역사로 탐구하는 현대 세계', semesters: [2] },
       { name: '금융과 경제생활', semesters: [2] },
+      { name: '행성우주과학', semesters: [2] },
       { name: '과학의 역사와 문화', semesters: [2] },
-      { name: '생태와 환경', semesters: [2] },
-      { name: '정보와 디지털 문해력', semesters: [2] },
-      { name: '스포츠 생활2', semesters: [2] },
-      { name: '음악과 미디어', semesters: [2] },
       { name: '미술 감상과 비평', semesters: [2] },
+      { name: '인공지능 생활 탐구', semesters: [2] },
+      { name: '생태와 환경', semesters: [2] },
       { name: '논술', semesters: [2] }
     ],
-    description: '3학년 2학기 선택과목군 6 (택5)'
+    description: '3학년 2학기 선택과목군 6 (택5)',
+    credits: 4
   },
   {
     id: '선택군7',
@@ -348,7 +349,8 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
       { name: '경제 수학', semesters: [2] },
       { name: '세계 문화와 영어', semesters: [2] }
     ],
-    description: '3학년 2학기 선택과목군 7 (택2)'
+    description: '3학년 2학기 선택과목군 7 (택2)',
+    credits: 4
   }
 ];
 
@@ -357,13 +359,11 @@ export const MANDATORY_SUBJECTS: Record<number, SungshinSubject[]> = {
     { name: '문학', semesters: [1] },
     { name: '대수', semesters: [1] },
     { name: '영어Ⅰ', semesters: [1] },
-    { name: '기술·가정', semesters: [1] },
     { name: '스포츠 생활1', semesters: [1] },
-    { name: '언어생활과 한자', semesters: [1, 2] },
+    { name: '기술·가정↔음악', semesters: [1, 2] },
     { name: '독서와 작문', semesters: [2] },
     { name: '미적분Ⅰ', semesters: [2] },
     { name: '영어Ⅱ', semesters: [2] },
-    { name: '음악', semesters: [2] },
     { name: '스포츠 생활2', semesters: [2] }
   ],
   3: [
@@ -392,7 +392,8 @@ export const SUBJECT_CREDITS: Record<string, number> = {
   '대수': 4, '미적분Ⅰ': 4, '확률과 통계': 4,
   '영어Ⅰ': 4, '영어Ⅱ': 4, '영어 독해와 작문': 4,
   '음악': 3, '미술': 3,
-  '기술·가정': 3, '정보': 3
+  '기술·가정': 3, '정보': 3,
+  '기술·가정↔음악': 6
 };
 
 export const getSubjectCredit = (name: string): number => {
@@ -423,10 +424,7 @@ export const GRADE1_COMMON_SUBJECTS: Grade1CommonSubject[] = [
   { name: '과학탐구실험2', area: '과학', credits: 1 },
   { name: '체육1', area: '체육', credits: 2 },
   { name: '체육2', area: '체육', credits: 2 },
-  { name: '음악', area: '예술', credits: 3 },
-  { name: '미술', area: '예술', credits: 3 },
-  { name: '기술·가정', area: '기술·가정/정보', credits: 3 },
-  { name: '정보', area: '기술·가정/정보', credits: 3 }
+  { name: '정보↔미술', area: '예술', credits: 6 }
 ];
 
 export const FIELD_DATA: Field[] = [
