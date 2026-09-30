@@ -256,7 +256,8 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
       { name: '기후변화와 환경생태', semesters: [1] },
       { name: '미술 창작', semesters: [1] }
     ],
-    description: '2학년 1학기 선택과목군 2 (택3)'
+    description: '2학년 1학기 선택과목군 2 (택3)',
+    credits: 3
   },
   {
     id: '선택군3',
@@ -290,7 +291,8 @@ export const SUNGSHIN_GROUPS: SelectionGroup[] = [
       { name: '지구과학', semesters: [2] },
       { name: '미술 창작', semesters: [2] }
     ],
-    description: '2학년 2학기 선택과목군 4 (택3)'
+    description: '2학년 2학기 선택과목군 4 (택3)',
+    credits: 3
   },
   {
     id: '선택군5',
@@ -371,6 +373,60 @@ export const MANDATORY_SUBJECTS: Record<number, SungshinSubject[]> = {
     { name: '스포츠 과학', semesters: [2] }
   ]
 };
+
+// 2027학년도 숭신고등학교 교육과정 편성표 기준 과목별 실제 편성 학점.
+// 학점 규정 판별기에서 과목당 학점을 조회할 때 사용하며, 표에 없는 과목은 기본값 4학점으로 간주한다.
+export const SUBJECT_CREDITS: Record<string, number> = {
+  '공통국어1': 4, '공통국어2': 4,
+  '공통수학1': 4, '공통수학2': 4,
+  '공통영어1': 4, '공통영어2': 4,
+  '한국사1': 3, '한국사2': 3,
+  '통합사회1': 4, '통합사회2': 4,
+  '통합과학1': 4, '통합과학2': 4,
+  '과학탐구실험1': 1, '과학탐구실험2': 1,
+  '체육1': 2, '체육2': 2,
+  '스포츠 생활1': 2, '스포츠 생활2': 2,
+  '스포츠 문화': 1, '스포츠 과학': 1,
+  '문학': 4, '독서와 작문': 4, '화법과 언어': 4,
+  '대수': 4, '미적분Ⅰ': 4, '확률과 통계': 4,
+  '영어Ⅰ': 4, '영어Ⅱ': 4, '영어 독해와 작문': 4,
+  '음악': 3, '미술': 3,
+  '기술·가정': 3, '정보': 3
+};
+
+export const getSubjectCredit = (name: string): number => {
+  return SUBJECT_CREDITS[name.trim()] ?? 4;
+};
+
+export interface Grade1CommonSubject {
+  name: string;
+  area: string; // 국어 / 수학 / 영어 / 한국사 / 사회 / 과학 / 체육
+  credits: number;
+}
+
+// 1학년 공통과목 기본(실제 편성) 학점표 — 2027학년도 숭신고 교육과정 편성표 기준.
+export const GRADE1_COMMON_SUBJECTS: Grade1CommonSubject[] = [
+  { name: '공통국어1', area: '국어', credits: 4 },
+  { name: '공통국어2', area: '국어', credits: 4 },
+  { name: '공통수학1', area: '수학', credits: 4 },
+  { name: '공통수학2', area: '수학', credits: 4 },
+  { name: '공통영어1', area: '영어', credits: 4 },
+  { name: '공통영어2', area: '영어', credits: 4 },
+  { name: '한국사1', area: '한국사', credits: 3 },
+  { name: '한국사2', area: '한국사', credits: 3 },
+  { name: '통합사회1', area: '사회', credits: 4 },
+  { name: '통합사회2', area: '사회', credits: 4 },
+  { name: '통합과학1', area: '과학', credits: 4 },
+  { name: '통합과학2', area: '과학', credits: 4 },
+  { name: '과학탐구실험1', area: '과학', credits: 1 },
+  { name: '과학탐구실험2', area: '과학', credits: 1 },
+  { name: '체육1', area: '체육', credits: 2 },
+  { name: '체육2', area: '체육', credits: 2 },
+  { name: '음악', area: '예술', credits: 3 },
+  { name: '미술', area: '예술', credits: 3 },
+  { name: '기술·가정', area: '기술·가정/정보', credits: 3 },
+  { name: '정보', area: '기술·가정/정보', credits: 3 }
+];
 
 export const FIELD_DATA: Field[] = [
   {
