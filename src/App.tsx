@@ -699,8 +699,25 @@ export default function App() {
     return false;
   };
 
+  // 선택한 학과와 이름이 100% 일치하는지 판별한다. (공백, 괄호 표기, 학과/학부/전공 같은 접미어만 무시)
+  const isExactMajorMatch = (selectedName: string, tipMajor: string) => {
+    const sClean = cleanMajorStr(selectedName);
+    if (!sClean) return false;
+    return tipMajor.split('/').some(part => cleanMajorStr(part) === sClean);
+  };
+
+  // 1원칙: 선택한 학과와 일치하는 학과 정보만 사용한다.
+  // 일치하는 학과 정보가 하나도 없을 때에만 유사 학과로 대체하며, 화면에 '유사 학과 기준'임을 표시한다.
+  const majorTipMatches = useMemo(() => {
+    if (!selectedMajor) return { tips: [] as UniversityTip[], isExact: false };
+    const exact = UNIVERSITY_TIPS.filter(tip => isExactMajorMatch(selectedMajor.name, tip.major));
+    if (exact.length > 0) return { tips: exact, isExact: true };
+    return { tips: UNIVERSITY_TIPS.filter(tip => isMajorMatch(selectedMajor.name, tip.major)), isExact: false };
+  }, [selectedMajor]);
+
   const universityTips = useMemo(() => {
     const search = univSearchTerm.trim().toLowerCase();
+    const matchedTipSet = new Set(majorTipMatches.tips);
     
     return UNIVERSITY_TIPS.filter(tip => {
       // 1. Region filter
@@ -713,15 +730,15 @@ export default function App() {
       // 2. View Mode (major-focused vs all)
       if (univViewMode === 'major') {
         if (!selectedMajor) return false;
-        const isMatch = isMajorMatch(selectedMajor.name, tip.major);
+        const isMatch = matchedTipSet.has(tip);
         // If there's a search term, allow searching within matching or broad
         if (!isMatch && !search) return false;
         if (!isMatch && search) {
           const matchesSearch = tip.university.toLowerCase().includes(search) || 
                                 tip.location.toLowerCase().includes(search) ||
                                 tip.major.toLowerCase().includes(search) ||
-                                tip.core.toLowerCase().includes(search) ||
-                                tip.recommended.toLowerCase().includes(search);
+                                (tip.core || '').toLowerCase().includes(search) ||
+                                (tip.recommended || '').toLowerCase().includes(search);
           if (!matchesSearch) return false;
         }
       }
@@ -731,14 +748,14 @@ export default function App() {
         const matchesSearch = tip.university.toLowerCase().includes(search) || 
                               tip.location.toLowerCase().includes(search) ||
                               tip.major.toLowerCase().includes(search) ||
-                              tip.core.toLowerCase().includes(search) ||
-                              tip.recommended.toLowerCase().includes(search);
+                              (tip.core || '').toLowerCase().includes(search) ||
+                              (tip.recommended || '').toLowerCase().includes(search);
         if (!matchesSearch) return false;
       }
       
       return true;
     });
-  }, [selectedMajor, univSearchTerm, univRegionFilter, univViewMode]);
+  }, [selectedMajor, majorTipMatches, univSearchTerm, univRegionFilter, univViewMode]);
 
   const subjectsByArea = useMemo(() => {
     if (!selectedMajor) return null;
@@ -783,9 +800,7 @@ export default function App() {
     const map: Record<string, { university: string; major: string; type: 'core' | 'recommended' }[]> = {};
     if (!selectedMajor) return map;
 
-    UNIVERSITY_TIPS.forEach(tip => {
-      if (!isMajorMatch(selectedMajor.name, tip.major)) return;
-
+    majorTipMatches.tips.forEach(tip => {
       const addEntries = (rawText: string, type: 'core' | 'recommended') => {
         parseTipSubjectNames(rawText).forEach(subjectPart => {
           const key = normalizeSubjectName(subjectPart);
@@ -803,7 +818,7 @@ export default function App() {
     });
 
     return map;
-  }, [selectedMajor]);
+  }, [selectedMajor, majorTipMatches]);
 
   const handleFieldSelect = (field: Field) => {
     setSelectedField(field);
@@ -1234,14 +1249,15 @@ export default function App() {
   const buildAiCheckTooltip = (subjectName: string, semester: number) => {
     const entries = subjectUniversityMap[normalizeSubjectName(subjectName)];
     if (!entries || entries.length === 0) {
-      return `${subjectName} ${semester}학기: AI 추천 과목 (특정 대학 지정 정보 없음 / 클릭 시 체크 해제)`;
+      const majorLabel = selectedMajor ? `${selectedMajor.name} ` : '';
+      return `${subjectName} ${semester}학기: AI 추천 과목 (${majorLabel}기준 대학 지정 정보 없음 / 클릭 시 체크 해제)`;
     }
 
     const MAX_SHOWN = 8;
     const shown = entries.slice(0, MAX_SHOWN);
     const lines = shown.map(e => `${e.university} ${e.major} (${e.type === 'core' ? '핵심과목' : '권장과목'})`);
     const remaining = entries.length - shown.length;
-    const header = `${subjectName} ${semester}학기 — 대학별 지정 현황`;
+    const header = `${subjectName} ${semester}학기 — 대학별 지정 현황${majorTipMatches.isExact ? '' : ' (유사학과 기준)'}`;
     const footer = remaining > 0 ? `\n외 ${remaining}개 대학` : '';
     return `${header}\n${lines.join('\n')}${footer}\n(클릭 시 체크 해제)`;
   };
@@ -2231,6 +2247,12 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+
+                  {univViewMode === 'major' && selectedMajor && !majorTipMatches.isExact && majorTipMatches.tips.length > 0 && (
+                    <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-200 text-xs font-bold text-amber-800">
+                      ⚠️ [{selectedMajor.name}]과 이름이 일치하는 학과 정보가 없어 유사 학과 기준으로 표시하고 있습니다.
+                    </div>
+                  )}
 
                   {/* Table Container */}
                   <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
