@@ -272,6 +272,17 @@ export default function App() {
   // 택N 초과 선택 등 경고를 잠깐 보여주는 토스트 알림
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 파란색(AI 추천) 체크를 눌렀을 때 열리는 '대학별 지정 현황' 팝업 (여기서 [선택 해지]를 눌러야만 체크가 해제된다)
+  const [aiInfoModal, setAiInfoModal] = useState<{ grade: number; groupId: string; subjectName: string; semester: number } | null>(null);
+
+  useEffect(() => {
+    if (!aiInfoModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAiInfoModal(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [aiInfoModal]);
 
   // 앱을 처음 열거나(새로고침 포함) 새로 시작할 때, 저장된 기본 교육과정이 있으면 자동으로 불러온다.
   useEffect(() => {
@@ -1100,6 +1111,13 @@ export default function App() {
     const key = `${grade}-${groupId}-${subjectName}-${semester}`;
     const currentState = getCellCheckState(grade, groupId, subjectName, semester, isAiRecommended);
 
+    // 파란색(AI 추천) 체크는 클릭해도 바로 해제되지 않고, 대학별 지정 현황 팝업을 먼저 보여준다.
+    // 체크 해제는 팝업의 [선택 해지] 버튼을 눌렀을 때만 이루어진다.
+    if (currentState === 'ai') {
+      setAiInfoModal({ grade, groupId, subjectName, semester });
+      return;
+    }
+
     // off -> 체크(선택) 상태로 바뀌는 시도일 때만, 이 과목군의 최대 선택 개수(택N)를 넘는지 확인한다.
     if (currentState === 'off') {
       const group = getGroupById(groupId);
@@ -1116,14 +1134,20 @@ export default function App() {
       if (currentState === 'consultant') {
         // 녹색 체크 상태 -> 한번 더 클릭하면 녹색이 사라짐 (off)
         return { ...prev, [key]: 'off' };
-      } else if (currentState === 'ai') {
-        // AI 파란색 체크 상태 -> 클릭하면 체크 해제 (off)
-        return { ...prev, [key]: 'off' };
       } else {
         // off (빈 칸) 상태 -> 다시 클릭하면 녹색 체크가 생김
         return { ...prev, [key]: 'consultant' };
       }
     });
+  };
+
+  // 팝업의 [선택 해지] 버튼: 파란색 체크를 해제(off)하고 팝업을 닫는다.
+  const handleDeselectAiCell = () => {
+    if (!aiInfoModal) return;
+    const { grade, groupId, subjectName, semester } = aiInfoModal;
+    const key = `${grade}-${groupId}-${subjectName}-${semester}`;
+    setConsultantChecks(prev => ({ ...prev, [key]: 'off' }));
+    setAiInfoModal(null);
   };
 
   const handleResetConsultantChecks = () => {
@@ -1244,22 +1268,19 @@ export default function App() {
     };
   }, [selectedMajor, isCustomMode, customGroups, consultantChecks]);
 
-  // 파란색(AI 추천) 체크에 마우스를 올렸을 때 보여줄 안내문을 만든다.
-  // 관련 대학이 있으면 "대학명(핵심/권장)" 형태로, 없으면 일반 안내 문구로 대체한다.
-  const buildAiCheckTooltip = (subjectName: string, semester: number) => {
+  // 체크 칸에 마우스를 올렸을 때 보여줄 '대학별 지정 현황' 안내문을 만든다.
+  // 이 과목을 지정한 대학이 없으면 null을 돌려준다.
+  const buildUniversityTooltip = (subjectName: string, semester: number, footerText: string): string | null => {
     const entries = subjectUniversityMap[normalizeSubjectName(subjectName)];
-    if (!entries || entries.length === 0) {
-      const majorLabel = selectedMajor ? `${selectedMajor.name} ` : '';
-      return `${subjectName} ${semester}학기: AI 추천 과목 (${majorLabel}기준 대학 지정 정보 없음 / 클릭 시 체크 해제)`;
-    }
+    if (!entries || entries.length === 0) return null;
 
     const MAX_SHOWN = 8;
     const shown = entries.slice(0, MAX_SHOWN);
     const lines = shown.map(e => `${e.university} ${e.major} (${e.type === 'core' ? '핵심과목' : '권장과목'})`);
     const remaining = entries.length - shown.length;
     const header = `${subjectName} ${semester}학기 — 대학별 지정 현황${majorTipMatches.isExact ? '' : ' (유사학과 기준)'}`;
-    const footer = remaining > 0 ? `\n외 ${remaining}개 대학` : '';
-    return `${header}\n${lines.join('\n')}${footer}\n(클릭 시 체크 해제)`;
+    const more = remaining > 0 ? `\n외 ${remaining}개 대학` : '';
+    return `${header}\n${lines.join('\n')}${more}\n${footerText}`;
   };
 
   const renderSemesterCheckbox = (
@@ -1280,10 +1301,12 @@ export default function App() {
         }}
         title={
           state === 'ai'
-            ? buildAiCheckTooltip(subjectName, semester)
+            ? (buildUniversityTooltip(subjectName, semester, '(클릭 시 전체 지정 현황 보기)')
+                ?? `${subjectName} ${semester}학기: AI 추천 과목 (${selectedMajor ? `${selectedMajor.name} ` : ''}기준 대학 지정 정보 없음 / 클릭하여 선택 상태 확인)`)
             : state === 'consultant'
             ? `${subjectName} ${semester}학기: 컨설턴트 상담 선택 (녹색 체크 / 클릭 시 해제)`
-            : `${subjectName} ${semester}학기: 미선택 (클릭하여 컨설턴트 녹색 체크)`
+            : (buildUniversityTooltip(subjectName, semester, '(클릭 시 컨설턴트 녹색 체크)')
+                ?? `${subjectName} ${semester}학기: 미선택 (클릭하여 컨설턴트 녹색 체크)`)
         }
         style={{
           width: '1.35rem',
@@ -3558,6 +3581,133 @@ export default function App() {
         subjectDetail={selectedSubjectModal} 
         onClose={() => setSelectedSubjectModal(null)} 
       />
+
+      {/* 파란색(AI 추천) 체크 클릭 시: 대학별 지정 현황 팝업 */}
+      <AnimatePresence>
+        {aiInfoModal && (() => {
+          const entries = subjectUniversityMap[normalizeSubjectName(aiInfoModal.subjectName)] || [];
+          // 같은 대학·모집단위는 한 번만 보여주고, 핵심과목이 하나라도 있으면 핵심과목으로 표시한다.
+          const uniqueMap = new Map<string, { university: string; major: string; type: 'core' | 'recommended' }>();
+          entries.forEach(e => {
+            const k = `${e.university}|${e.major}`;
+            const prev = uniqueMap.get(k);
+            if (!prev || (prev.type !== 'core' && e.type === 'core')) uniqueMap.set(k, e);
+          });
+          const list = Array.from(uniqueMap.values()).sort((a, b) => (a.type === b.type ? 0 : a.type === 'core' ? -1 : 1));
+          const coreCount = list.filter(e => e.type === 'core').length;
+          const recommendedCount = list.length - coreCount;
+          const majorName = selectedMajor?.name || '';
+
+          return (
+            <motion.div
+              key="ai-info-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAiInfoModal(null)}
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print:hidden"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                className="bg-white w-full max-w-md max-h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              >
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-5 py-4 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <h3 className="font-black text-base leading-snug">
+                        {aiInfoModal.subjectName} {aiInfoModal.semester}학기 — 대학별 지정 현황
+                      </h3>
+                      <p className="text-xs text-blue-100 mt-0.5">
+                        [{majorName}] 진학 및 주요 대학 전공 연계 지정 현황{majorTipMatches.isExact ? '' : ' (유사학과 기준)'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setAiInfoModal(null)}
+                    className="p-1 rounded-full hover:bg-white/20 transition-colors shrink-0"
+                    title="닫기"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  <div className="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                    <span className="text-sm font-black text-blue-800 whitespace-nowrap shrink-0">✅ 현재 선택됨</span>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      성적 등 사정이 있으면 아래 [선택 해지]를 누르세요. 해지해도 이 목록은 계속 볼 수 있습니다.
+                    </p>
+                  </div>
+
+                  {list.length > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 bg-blue-50/70 border border-blue-100 rounded-xl px-4 py-2.5 text-xs font-bold text-blue-800">
+                        <span>[{majorName}] 총 {list.length}개 모집단위 지정</span>
+                        <span>
+                          {recommendedCount > 0
+                            ? `핵심과목 ${coreCount}개 · 권장과목 ${recommendedCount}개`
+                            : `핵심과목 ${coreCount}개`}
+                        </span>
+                      </div>
+                      {list.map(e => (
+                        <div
+                          key={`${e.university}|${e.major}`}
+                          className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-4 py-3"
+                        >
+                          <div className="text-sm min-w-0">
+                            <span className="font-black text-slate-900">{e.university}</span>{' '}
+                            <span className="text-slate-600">{e.major}</span>{' '}
+                            <span className={`text-xs font-bold ${e.type === 'core' ? 'text-blue-700' : 'text-emerald-700'}`}>
+                              ({e.type === 'core' ? '핵심과목' : '권장과목'})
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[11px] font-bold px-3 py-1 rounded-full whitespace-nowrap border shrink-0 ${
+                              e.type === 'core'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {e.type === 'core' ? '핵심과목' : '권장과목'}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="border border-dashed border-slate-200 rounded-xl px-4 py-8 text-center text-sm text-slate-400">
+                      [{majorName}] 기준으로 이 과목을 지정한 대학 정보가 없습니다.
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-100 bg-white">
+                  <button
+                    onClick={handleDeselectAiCell}
+                    className="px-4 py-2 rounded-xl text-sm font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                  >
+                    선택 해지
+                  </button>
+                  <button
+                    onClick={() => setAiInfoModal(null)}
+                    className="px-6 py-2 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
 
       {/* 택N 초과 선택 등 경고 토스트 */}
       <AnimatePresence>
