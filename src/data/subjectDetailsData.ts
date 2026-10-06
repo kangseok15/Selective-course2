@@ -876,6 +876,24 @@ export const SUBJECT_DETAILS: Record<string, Partial<SubjectDetail>> = {
   },
 
   // === 정보 및 기술·가정 교과 ===
+  '기술·가정': {
+    area: '기술·가정',
+    type: '일반',
+    credits: '기본 4학점 (3~5학점 편성 가능)',
+    evaluation: '성취도 5단계 + 석차 5등급',
+    description: '기술적 문제 해결과 생활 자립 역량을 바탕으로 인간의 삶과 기술의 관계를 이해하고, 지속가능한 생활 방식과 진로를 설계하는 일반 선택 과목입니다.',
+    coreIdeas: [
+      '기술 시스템과 생활 속 문제를 공학적·가정학적 관점에서 분석하고 창의적으로 해결합니다.',
+      '자원 관리, 소비, 안전 등 생활 자립 역량을 기르고 가족·지역사회와 더불어 사는 태도를 갖춥니다.'
+    ],
+    contentElements: [
+      { category: '기술·공학', items: ['기술 시스템과 기술 혁신', '공학적 설계와 문제 해결', '지속가능한 기술 활용'] },
+      { category: '가정·생활', items: ['생애 설계와 생활 자립', '합리적 소비와 자원 관리', '가족·공동체와 생활 안전'] }
+    ],
+    relatedMajors: ['가정교육과', '기술교육과', '소비자학과', '식품영양학과', '아동가족학과'],
+    relatedCareers: ['기술·가정 교사', '소비자 상담 전문가', '영양사', '생활·주거 설계 전문가'],
+    connections: { next: ['생애 설계와 자립', '생활과학 탐구', '로봇과 공학세계'] }
+  },
   '정보': {
     area: '기술·가정',
     type: '일반',
@@ -962,6 +980,25 @@ export const SUBJECT_DETAILS: Record<string, Partial<SubjectDetail>> = {
     ],
     relatedMajors: ['체육학과', '스포츠산업학과'],
     relatedCareers: ['스포츠코치', '체육지도자']
+  },
+  '음악': {
+    area: '예술',
+    type: '일반',
+    credits: '기본 3학점 (2~4학점)',
+    evaluation: '성취도 3단계 (A·B·C, 석차등급 미기재)',
+    description: '다양한 음악을 표현하고 감상하며 음악의 가치와 의미를 이해하여, 음악적 감수성과 창의성을 기르는 예술 교과의 일반 선택 과목입니다.',
+    coreIdeas: [
+      '노래 부르기·악기 연주·음악 만들기 활동으로 자신의 음악적 생각과 감정을 표현합니다.',
+      '다양한 시대와 문화의 음악을 감상하고 비평하며 음악적 소양과 문화 향유 능력을 키웁니다.'
+    ],
+    contentElements: [
+      { category: '표현', items: ['노래 부르기와 악기 연주', '음악 만들기(창작)', '합창·합주 등 협력적 표현'] },
+      { category: '감상', items: ['다양한 시대·문화권의 음악 감상', '음악 요소와 형식의 이해', '음악에 대한 감상 비평'] },
+      { category: '음악의 생활화', items: ['음악과 삶·사회·문화의 관계', '디지털 매체를 활용한 음악 활동'] }
+    ],
+    relatedMajors: ['음악학과', '작곡과', '실용음악과', '음악교육과', '문화예술학과'],
+    relatedCareers: ['연주자', '작곡가', '음악교사', '음악치료사', '공연기획자'],
+    connections: { next: ['음악 연주와 창작', '음악 감상과 비평'] }
   },
   '음악 연주와 창작': {
     area: '예술',
@@ -1099,6 +1136,9 @@ export const SUBJECT_DETAILS: Record<string, Partial<SubjectDetail>> = {
   }
 };
 
+// 이름이 짧아 다른 과목명에 잘못 부분 일치하기 쉬운 키는 정확히 같은 이름일 때만 매칭한다.
+const EXACT_MATCH_ONLY_KEYS = new Set(['기술·가정', '음악']);
+
 /**
  * 과목명(name)을 인자로 받아 과목 상세 정보를 생성/반환하는 헬퍼 함수
  * 데이터베이스에 없더라도 2022 개정 교육과정 기준에 맞게 지능적으로 생성합니다.
@@ -1128,7 +1168,10 @@ export function getSubjectDetail(subjectName: string): SubjectDetail {
   }
 
   // 2. 부분 일치 검색 (예: 공통수학 -> 공통수학1 등)
-  const key = Object.keys(SUBJECT_DETAILS).find(k => k === trimmed || trimmed.includes(k) || k.includes(trimmed));
+  const key = Object.keys(SUBJECT_DETAILS).find(k => {
+    if (EXACT_MATCH_ONLY_KEYS.has(k)) return k === trimmed;
+    return k === trimmed || trimmed.includes(k) || k.includes(trimmed);
+  });
   if (key && SUBJECT_DETAILS[key]) {
     const raw = SUBJECT_DETAILS[key];
     const evalInfo = getSubjectEvaluationInfo(trimmed, raw.area, raw.type as SelectionType);
