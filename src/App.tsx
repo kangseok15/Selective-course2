@@ -2782,47 +2782,58 @@ export default function App() {
                                   )}
                                   <td style={{ padding: '0.65rem 0.4rem', borderRight: '1px solid #cbd5e1', color: '#1e293b', textAlign: 'center', fontWeight: '700', fontSize: '0.82rem' }}>{area}</td>
                                   <td style={{ padding: '0.65rem 0.8rem', borderRight: '1px solid #cbd5e1', textAlign: 'left' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenSubjectModal(subject.name)}
-                                        title={`${subject.name} 과목 상세 안내 팝업 보기`}
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          padding: '0.1rem 0',
-                                          margin: 0,
-                                          font: 'inherit',
-                                          color: '#0f172a',
-                                          cursor: 'pointer',
-                                          textAlign: 'left',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '0.45rem',
-                                          fontWeight: '700',
-                                          fontSize: '0.94rem',
-                                          textDecoration: 'none'
-                                        }}
-                                        className="hover:text-blue-700 transition-colors group"
-                                      >
-                                        <span style={{ textDecoration: 'none' }}>
-                                          {subject.name}
-                                        </span>
-                                        <Info style={{ width: '0.82rem', height: '0.82rem', color: '#2563eb', opacity: 0.85, flexShrink: 0 }} />
-                                        {evalInfo.isCsat && (
-                                          <span style={{ 
-                                            fontSize: '0.68rem', 
-                                            backgroundColor: '#ffedd5', 
-                                            color: '#c2410c', 
-                                            border: '1px solid #fdba74', 
-                                            borderRadius: '4px', 
-                                            padding: '0.1rem 0.35rem', 
-                                            fontWeight: '700' 
-                                          }}>
-                                            수능
-                                          </span>
-                                        )}
-                                      </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.45rem' }}>
+                                      {/* "기술·가정↔음악"처럼 합쳐진 과목은 각 과목을 따로 클릭해 과목 설명을 볼 수 있게 분리한다. */}
+                                      {subject.name.split('↔').map((part, partIdx) => {
+                                        const partName = part.trim();
+                                        return (
+                                          <Fragment key={`${subject.name}-${partIdx}`}>
+                                            {partIdx > 0 && (
+                                              <span style={{ color: '#64748b', fontWeight: '700', fontSize: '0.94rem' }}>↔</span>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenSubjectModal(partName)}
+                                              title={`${partName} 과목 상세 안내 팝업 보기`}
+                                              style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                padding: '0.1rem 0',
+                                                margin: 0,
+                                                font: 'inherit',
+                                                color: '#0f172a',
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.45rem',
+                                                fontWeight: '700',
+                                                fontSize: '0.94rem',
+                                                textDecoration: 'none'
+                                              }}
+                                              className="hover:text-blue-700 transition-colors group"
+                                            >
+                                              <span style={{ textDecoration: 'none' }}>
+                                                {partName}
+                                              </span>
+                                              <Info style={{ width: '0.82rem', height: '0.82rem', color: '#2563eb', opacity: 0.85, flexShrink: 0 }} />
+                                              {partIdx === 0 && evalInfo.isCsat && (
+                                                <span style={{ 
+                                                  fontSize: '0.68rem', 
+                                                  backgroundColor: '#ffedd5', 
+                                                  color: '#c2410c', 
+                                                  border: '1px solid #fdba74', 
+                                                  borderRadius: '4px', 
+                                                  padding: '0.1rem 0.35rem', 
+                                                  fontWeight: '700' 
+                                                }}>
+                                                  수능
+                                                </span>
+                                              )}
+                                            </button>
+                                          </Fragment>
+                                        );
+                                      })}
                                     </div>
                                   </td>
                                   <td style={{ padding: '0.65rem 0.4rem', borderRight: '1px solid #cbd5e1', textAlign: 'center' }}>
